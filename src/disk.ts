@@ -412,8 +412,7 @@ export function readFileWithFd(
     return buffer;
   }
   if (info.unpacked) {
-    const unpackedDir = `${filesystem.getRootPath()}.unpacked`;
-    buffer = fs.readFileSync(ensureWithin(unpackedDir, filename));
+    buffer = fs.readFileSync(path.join(`${filesystem.getRootPath()}.unpacked`, filename));
   } else {
     const offset = 8 + filesystem.getHeaderSize() + parseInt(info.offset);
     fs.readSync(fd, buffer, 0, info.size, offset);
