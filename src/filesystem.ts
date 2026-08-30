@@ -67,7 +67,7 @@ export class Filesystem {
 
   searchNodeFromDirectory(p: string) {
     let json = this.header;
-    const dirs = p.split(path.sep);
+    const dirs = p.split(path.sep).filter((dir) => dir.length > 0);
     for (const dir of dirs) {
       if (dir !== '.') {
         if ('files' in json) {
