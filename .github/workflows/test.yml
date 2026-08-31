@@ -44,3 +44,60 @@ jobs:
         run: yarn build
       - name: Test
         run: yarn test
+      # Abloh. It sits right after the step that runs your suite, so it measures the
+      # tree your suite ran in and rebuilds nothing of yours. It puts that tree back
+      # exactly as it found it, so the steps below still see what they always saw.
+      # It installs its own CLI - and its own Node, if this runner's is older than 20.6 -
+      # under RUNNER_TEMP, leaving your PATH alone.
+      # The if: runs it even when an earlier step of yours failed, so it says so rather
+      # than vanishing. It reports on this pull request and gates nothing until merge,
+      # and it files none of that itself - the abloh-publish job below does, because
+      # this job holds no permission to. Pinned to a commit; a tag can be moved.
+      # The rest of the if: pins it to the one leg named in abloh.yml's setup.matrixLeg,
+      # so this job still fans out and Abloh measures once instead of once per leg.
+      - name: Abloh
+        if: ${{ !cancelled() && matrix.node-version == '22.12.x' && matrix.os == 'ubuntu-22.04' }}
+        uses: Vero-Technology/abloh-action@596ef9a2ed0e0570244e6575faee05c285ea0376
+        with:
+          base: ${{ github.event.pull_request.base.sha }}
+          job-status: ${{ job.status }}
+          publish: attestation-job
+      # ---------------------------------------------------------------------------------
+      # ADDED BY THE ABLOH FIRST-CONTACT CENSUS, and these are the only lines of this file
+      # that are not what `abloh init` wrote. It keeps the run's own artifact so the
+      # census can classify from evidence rather than from this job's log. It runs after
+      # everything Abloh does and cannot reach what was measured.
+      # ---------------------------------------------------------------------------------
+      - name: census - keep the run artifact
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: abloh-census-evidence-${{ github.job }}-${{ strategy.job-index }}
+          path: |
+            ${{ runner.temp }}/abloh/${{ github.run_id }}-${{ github.run_attempt }}/attest-results.json
+            ${{ runner.temp }}/abloh/${{ github.run_id }}-${{ github.run_attempt }}/attest-summary.md
+            ${{ runner.temp }}/abloh/${{ github.run_id }}-${{ github.run_attempt }}/abloh-engine-v2-proofs.json
+            ${{ runner.temp }}/abloh/${{ github.run_id }}-${{ github.run_attempt }}/abloh-sweep.json
+            ${{ runner.temp }}/abloh/${{ github.run_id }}-${{ github.run_attempt }}/abloh-sweep-summary.json
+            ${{ runner.temp }}/abloh/${{ github.run_id }}-${{ github.run_attempt }}/abloh-sweep-preceding-refusal.json
+          if-no-files-found: ignore
+          retention-days: 30
+  # Abloh's publish job. It runs no code of yours, builds nothing and measures nothing:
+  # it takes the report the Abloh step above left on this run and files it.
+  #
+  # It is a separate job because GitHub grants id-token: write to a whole JOB and
+  # not to one step: putting it on the job above would hand the same identity to every
+  # step that runs there, Abloh's and everybody else's. Here it reaches Abloh's step
+  # and nothing else. It authorizes one thing, filing this report with Abloh, and
+  # carries no write access to your repository. Declaring the block below takes no
+  # grant away from anything, because this job is new and had none.
+  abloh-publish:
+    needs: test
+    # Runs even when the job above failed - a trial that stopped is the report you need.
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - name: Abloh publish
+        uses: Vero-Technology/abloh-action/attest@596ef9a2ed0e0570244e6575faee05c285ea0376
